@@ -260,23 +260,55 @@ function restart_all() {
 }
 
 function vless_reality_information() {
-  echo -e "${Red} Xray 配置信息 ${Font}"  
-  local_ipv4=$(curl -s4m8 http://ip.gs)
-  cat /usr/local/etc/xray/KEY
-  echo
-  jq --arg address "$local_ipv4" '.inbounds[0] | {address: $address, port, "id": .settings.clients[0].id, serverNames: .streamSettings.realitySettings.serverNames, privateKey: .streamSettings.realitySettings.privateKey, shortIds: .streamSettings.realitySettings.shortIds}' /usr/local/etc/xray/reality_config.json
+  echo -e "${Red} Xray 配置信息 ${Font}"
 
-  print_ok "-------------------------------------------------"
-  echo
+  local cfg="${xray_conf_dir}/reality_config.json"
+  local keyf="${xray_conf_dir}/KEY"
 
-  PUBLIC_KEY=$(grep 'Public key:' /usr/local/etc/xray/KEY | cut -d ' ' -f 3)
-  config_info=$(jq --arg address "$local_ipv4" --arg PUBLIC_KEY "$PUBLIC_KEY" '.inbounds[0] | {address: $address, port, id: .settings.clients[0].id, serverNames: .streamSettings.realitySettings.serverNames, privateKey: $PUBLIC_KEY, shortIds: .streamSettings.realitySettings.shortIds}' /usr/local/etc/xray/reality_config.json)
+  # 本机 IP
+  local local_ipv4
+  local_ipv4=$(curl -s4m8 http://ip.gs || curl -s4m8 https://ifconfig.co)
 
-  vless_url="vless://$(echo "$config_info" | jq -r '.id')@$(echo "$config_info" | jq -r '.address'):$(echo "$config_info" | jq -r '.port')?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$(echo "$config_info" | jq -r '.serverNames[1]')&fp=chrome&pbk=$(echo "$config_info" | jq -r '.privateKey')&sid=$(echo "$config_info" | jq -r '.shortIds[0]')&spx=%2F&type=tcp&headerType=none#VLESS_TCP_REALITY"
+  # 从 KEY 解析 Password（作为 pbk 使用）
+  local PASSWORD
+  PASSWORD=$(
+    awk -F': *' '
+      BEGIN{IGNORECASE=1}
+      /^[[:space:]]*Password[[:space:]]*:/ {gsub(/\r/,""); print $2; exit}
+    ' "$keyf" | sed "s/[^A-Za-z0-9_-]//g"
+  )
+  if [[ -z "$PASSWORD" ]]; then
+    print_error "未能从 ${keyf} 解析出 Password"
+    return 1
+  fi
 
+  # 基础字段
+  local id port sni sid
+  id=$(jq -r '.inbounds[0].settings.clients[0].id' "$cfg")
+  port=$(jq -r '.inbounds[0].port' "$cfg")
+  sni=$(jq -r '.inbounds[0].streamSettings.realitySettings.serverNames[0]' "$cfg")
+  sid=$(jq -r '.inbounds[0].streamSettings.realitySettings.shortIds[0]' "$cfg")
+
+  # 展示（不泄露 privateKey）
+  jq --arg address "$local_ipv4" --arg password "$PASSWORD" \
+     '.inbounds[0] | {
+        address: $address,
+        port,
+        id: .settings.clients[0].id,
+        serverNames: .streamSettings.realitySettings.serverNames,
+        password: $password,
+        shortIds: .streamSettings.realitySettings.shortIds
+      }' "$cfg"
+
+  print_ok "---------------------- 客户端链接（vless://） ----------------------"
+
+  # 生成 vless 链接：pbk=Password
+  local vless_url
+  vless_url="vless://${id}@${local_ipv4}:${port}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=${sni}&fp=chrome&pbk=${PASSWORD}&sid=${sid}&spx=%2F&type=tcp&headerType=none#VLESS_TCP_REALITY"
   echo "$vless_url"
   echo
 }
+
 
 function basic_information() {
   print_ok "VLESS+TCP+REALITY 安装成功"
@@ -314,20 +346,20 @@ function configure_xray_service_dir() {
 
     # 停止并禁用 xray 服务
     echo "停止 xray 服务..."
-    sudo systemctl stop xray || { echo "停止 xray 服务失败。"; exit 1; }
-    sudo systemctl disable xray || { echo "禁用 xray 服务失败。"; exit 1; }
+    systemctl stop xray || { echo "停止 xray 服务失败。"; exit 1; }
+    systemctl disable xray || { echo "禁用 xray 服务失败。"; exit 1; }
 
     # 使用 sed 修改 ExecStart 行，将其更改为使用 -confdir 参数
     echo "修改 xray.service 配置为文件夹路径..."
-    sudo sed -i "s|^ExecStart=.*|ExecStart=/usr/local/bin/xray run -confdir $CONFIG_DIR|g" "$SERVICE_FILE" || { echo "修改 ExecStart 失败。"; exit 1; }
+    sed -i "s|^ExecStart=.*|ExecStart=/usr/local/bin/xray run -confdir $CONFIG_DIR|g" "$SERVICE_FILE" || { echo "修改 ExecStart 失败。"; exit 1; }
 
     # 重新加载 systemd 守护进程
-    sudo systemctl daemon-reload || { echo "重新加载 systemd 守护进程失败。"; exit 1; }
+    systemctl daemon-reload || { echo "重新加载 systemd 守护进程失败。"; exit 1; }
 
     # 启用并启动 xray 服务
     echo "启用并启动 xray 服务..."
-    sudo systemctl enable xray || { echo "启用 xray 服务失败。"; exit 1; }
-    sudo systemctl start xray || { echo "启动 xray 服务失败。"; exit 1; }
+    systemctl enable xray || { echo "启用 xray 服务失败。"; exit 1; }
+    systemctl start xray || { echo "启动 xray 服务失败。"; exit 1; }
 
     echo "xray.service 已成功配置为从目录 $CONFIG_DIR 加载配置文件。"
 }
