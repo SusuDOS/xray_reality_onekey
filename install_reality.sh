@@ -163,11 +163,37 @@ function xray_tmp_config_file_check_and_use() {
   fi
 }
 
-function modify_privateKey() {
-  PRIVATE_KEY=$(grep 'Private key:' /usr/local/etc/xray/KEY | cut -d ' ' -f 3)  
-  jq --arg newPrivateKey "$PRIVATE_KEY" '.inbounds[0].streamSettings.realitySettings.privateKey = $newPrivateKey' /usr/local/etc/xray/reality_config.json > /usr/local/etc/xray/config_temp.json
-  xray_tmp_config_file_check_and_use
-  judge "Xray TCP privateKey 修改"
+modify_privateKey() {
+  # 确保 KEY 存在
+  [[ -s "${xray_conf_dir}/KEY" ]] || { print_error "未找到 ${xray_conf_dir}/KEY"; exit 1; }
+
+  # 兼容多种写法：PrivateKey: / Private key:（大小写、空格、回车）
+  local PRIVATE_KEY
+  PRIVATE_KEY=$(
+    awk -F': *' '
+      BEGIN{IGNORECASE=1}
+      /^[[:space:]]*Private[[:space:]]*Key[[:space:]]*:/ {gsub(/\r/,""); print $2; exit}
+      /^[[:space:]]*PrivateKey[[:space:]]*:/          {gsub(/\r/,""); print $2; exit}
+    ' "${xray_conf_dir}/KEY" | sed "s/[^A-Za-z0-9_-]//g"
+  )
+
+  if [[ -z "${PRIVATE_KEY}" ]]; then
+    print_error "未能从 KEY 中解析出 PrivateKey（请检查 ${xray_conf_dir}/KEY 格式）"
+    exit 1
+  fi
+
+  # 写入模板配置
+  jq --arg pk "$PRIVATE_KEY" \
+     '.inbounds[0].streamSettings.realitySettings.privateKey = $pk' \
+     "${xray_conf_dir}/reality_config.json" > "${xray_conf_dir}/config_temp.json"
+
+  if [[ -s "${xray_conf_dir}/config_temp.json" ]]; then
+    mv -f "${xray_conf_dir}/config_temp.json" "${xray_conf_dir}/reality_config.json"
+    print_ok "Xray TCP privateKey 修改完成"
+  else
+    print_error "私钥写入后临时配置为空，放弃覆盖"
+    exit 1
+  fi
 }
 
 function modify_shortIds() {
