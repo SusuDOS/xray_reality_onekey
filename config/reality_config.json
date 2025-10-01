@@ -13,7 +13,7 @@
       "settings": {
         "clients": [
           {
-            "id": "17fa48b7-c9c4-436f-a538-5a07b4579723",
+            "id": "c49bc218-4942-4ab2-9b18-dc7bae08cd77",
             "flow": "xtls-rprx-vision"
           }
         ],
@@ -30,12 +30,12 @@
             "amazon.com",
             "www.amazon.com"
           ],
-          "privateKey": "iBIKxyJNdlHk5vyB8tfnmXgRm2ah5yz3ycW74bkxMiw",
+          "privateKey": "yFsYbPBtmlXH84Ez53odP4hkzJXTs6EazVd7xUNYVY",
           "minClientVer": "",
           "maxClientVer": "",
           "maxTimeDiff": 12000,
           "shortIds": [
-            "a3yc_W74"
+            "c067b86bd07f"
           ]
         }
       }
@@ -44,17 +44,11 @@
   "outbounds": [
     {
       "protocol": "freedom",
-      "tag": "reality_outbound"
+      "tag": "direct"
     },
     {
       "protocol": "blackhole",
-      "tag": "reality_blocked"
+      "tag": "blocked"
     }
-  ]    
+  ]
 }
-
-
-
-
-
-
