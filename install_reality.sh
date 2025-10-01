@@ -228,11 +228,12 @@ function modify_port() {
 }
 
 function configure_xray() {
-  cd /usr/local/etc/xray && rm -f reality_config.json && wget -O reality_config.json https://raw.githubusercontent.com/susudos/xray_reality_onekey/${github_branch}/config/reality_config.json  
+  cd /usr/local/etc/xray && rm -rf reality_config.json && wget -O reality_config.json https://raw.githubusercontent.com/susudos/xray_reality_onekey/${github_branch}/config/reality_config.json  
   modify_UUID
   modify_port
   modify_shortIds
   modify_privateKey
+  cp -f reality_config.json config.json
 }
 
 function xray_install() {
